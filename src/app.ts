@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { createRateLimiter } from './middleware/rateLimiter'
-import RedisClient from './utils/redisClient'
 
 const app = express()
 app.use(express.json())
@@ -24,6 +23,18 @@ const apiRateLimiter = createRateLimiter({
       maxRequests: 100,
     },
   },
+  overrides: [
+    {
+      startTime: Date.now(),
+      endTime: Date.now() + 7 * 24 * 60 * 60 * 1000, // week from now
+      limitConfig: {
+        windowSizeInSeconds: 60 * 60,
+        maxRequests: 1000,
+      },
+      criteria: (req: Request) => req.headers['x-user'] === 'jaycar',
+      endpoints: ['/auth'],
+    },
+  ],
 })
 
 app.use('/api', apiRateLimiter)

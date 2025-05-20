@@ -2,6 +2,14 @@ import { Request, Response, NextFunction } from 'express'
 import RedisClient from '../utils/redisClient'
 import { RateLimitConfig, defaultRateLimits } from '../config/rateLimitConfig'
 
+interface RateLimitOverride {
+  startTime: number
+  endTime: number
+  limitConfig: RateLimitConfig
+  endpoints?: string[]
+  criteria?: (req: Request) => boolean
+}
+
 export interface RateLimiterOptions {
   keyPrefix?: string
   isAuthenticated?: (req: Request) => boolean
@@ -10,6 +18,35 @@ export interface RateLimiterOptions {
     unauthenticated?: RateLimitConfig
     endpoints?: Record<string, RateLimitConfig>
   }
+  overrides?: RateLimitOverride[]
+}
+
+const getActiveOverrides = (req: Request, options: RateLimiterOptions, endpoint: string) => {
+  if (!options.overrides) {
+    return []
+  }
+  const now = Date.now()
+
+  return options.overrides.filter(override => {
+    if (override.startTime > now || override.endTime < now) {
+      return false
+    }
+
+    if (override.endpoints && override.endpoints.length > 0) {
+      if (!override.endpoints.includes(endpoint)) {
+        return false
+      }
+    }
+
+    if (override.criteria) {
+      const result = override.criteria(req)
+      if (!result) {
+        return false
+      }
+    }
+
+    return true
+  })
 }
 
 export const createRateLimiter = (options: RateLimiterOptions = {}) => {
@@ -31,8 +68,15 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
       const authenticated = isAuthenticated(req)
 
       let limitConfig: RateLimitConfig
+      const activeOverrides = getActiveOverrides(req, options, endpoint)
+
+      // Check for overrides
+      if (activeOverrides.length > 0) {
+        activeOverrides.sort((a, b) => b.startTime - a.startTime)
+        limitConfig = activeOverrides[0].limitConfig
+      }
       // check for endpoint-specific limits
-      if (limits.endpoints[endpoint]) {
+      else if (limits.endpoints[endpoint]) {
         limitConfig = limits.endpoints[endpoint]
       } else {
         limitConfig = authenticated ? limits.authenticated : limits.unauthenticated
