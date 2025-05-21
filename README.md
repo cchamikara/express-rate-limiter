@@ -102,6 +102,7 @@ const customRateLimiter = createRateLimiter({
             endpoints: ['/auth'],
         },
     ],
+   algorithm: 'sliding_log'
 });
 
 app.use('/api', customRateLimiter);
