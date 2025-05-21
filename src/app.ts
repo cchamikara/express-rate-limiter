@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express'
+import express, { Request, Response } from 'express'
 import { createRateLimiter } from './middleware/rateLimiter'
 
 const app = express()
