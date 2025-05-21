@@ -86,11 +86,12 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
       const key = `${keyPrefix}${ip}:${endpoint}`
 
       if (options.algorithm === 'sliding_log') {
+        // Pseudocode from: https://blog.algomaster.io/i/146668173/sliding-window-log
         // 1.Keep a log of request timestamps.
         // 2.When a new request comes in, remove all entries older than the window size.
         // 3.Count the remaining entries.
-        // 4.If the count is less than the limit, allow the request and add its timestamp to the log.
-        // 5.If the count exceeds the limit, request is denied.
+        // 4.If the count exceeds the limit, the request is denied.
+        // 5.If the count is less than the limit, allow the request and add its timestamp to the log.
 
         const data = await redisClient.get(key)
         let timestamps: number[] = data ? JSON.parse(data) : []
@@ -100,7 +101,7 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
         // Filter out timestamps that are outside the current window
         timestamps = timestamps.filter(ts => ts > windowStartTime)
 
-        if (timestamps.length > limitConfig.maxRequests) {
+        if (timestamps.length >= limitConfig.maxRequests) {
           return res.status(429).json({
             error: 'Too Many Requests',
             message: 'Rate limit exceeded',
