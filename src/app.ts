@@ -54,7 +54,7 @@ app.get('/api/auth', (req: Request, res: Response) => {
   res.json({ message: 'This is a protected API endpoint' })
 })
 
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 3002
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)

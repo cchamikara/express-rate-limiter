@@ -13,6 +13,7 @@ interface RateLimitOverride {
 export interface RateLimiterOptions {
   keyPrefix?: string
   isAuthenticated?: (req: Request) => boolean
+  algorithm?: 'sliding_log'
   customLimits?: {
     authenticated?: RateLimitConfig
     unauthenticated?: RateLimitConfig
@@ -83,19 +84,48 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
       }
 
       const key = `${keyPrefix}${ip}:${endpoint}`
-      const currentCount = await redisClient.get(key)
-      const count = currentCount ? parseInt(currentCount) : 0
 
-      if (count >= limitConfig.maxRequests) {
-        return res.status(429).json({
-          error: 'Too Many Requests',
-          message: 'Rate limit exceeded',
-        })
-      }
+      if (options.algorithm === 'sliding_log') {
+        // Pseudocode from: https://blog.algomaster.io/i/146668173/sliding-window-log
+        // 1.Keep a log of request timestamps.
+        // 2.When a new request comes in, remove all entries older than the window size.
+        // 3.Count the remaining entries.
+        // 4.If the count exceeds the limit, the request is denied.
+        // 5.If the count is less than the limit, allow the request and add its timestamp to the log.
 
-      const newCount = await redisClient.incr(key)
-      if (newCount === 1) {
+        const data = await redisClient.get(key)
+        let timestamps: number[] = data ? JSON.parse(data) : []
+
+        const now = Date.now()
+        const windowStartTime = now - limitConfig.windowSizeInSeconds * 1000
+        // Filter out timestamps that are outside the current window
+        timestamps = timestamps.filter(ts => ts > windowStartTime)
+
+        if (timestamps.length >= limitConfig.maxRequests) {
+          return res.status(429).json({
+            error: 'Too Many Requests',
+            message: 'Rate limit exceeded',
+          })
+        }
+
+        timestamps.push(now)
+        await redisClient.set(key, JSON.stringify(timestamps))
         await redisClient.expire(key, limitConfig.windowSizeInSeconds)
+      } else {
+        const currentCount = await redisClient.get(key)
+        const count = currentCount ? parseInt(currentCount) : 0
+
+        if (count >= limitConfig.maxRequests) {
+          return res.status(429).json({
+            error: 'Too Many Requests',
+            message: 'Rate limit exceeded',
+          })
+        }
+
+        const newCount = await redisClient.incr(key)
+        if (newCount === 1) {
+          await redisClient.expire(key, limitConfig.windowSizeInSeconds)
+        }
       }
 
       next()
