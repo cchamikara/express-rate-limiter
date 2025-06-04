@@ -83,7 +83,7 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
         limitConfig = authenticated ? limits.authenticated : limits.unauthenticated
       }
 
-      const key = `${keyPrefix}${ip}:${endpoint}`
+      let key = `${keyPrefix}${ip}:${endpoint}`
 
       if (options.algorithm === 'sliding_log') {
         // Pseudocode from: https://blog.algomaster.io/i/146668173/sliding-window-log
@@ -93,6 +93,7 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
         // 4.If the count exceeds the limit, the request is denied.
         // 5.If the count is less than the limit, allow the request and add its timestamp to the log.
 
+        key = `sl:${key}`
         const data = await redisClient.get(key)
         let timestamps: number[] = data ? JSON.parse(data) : []
 
