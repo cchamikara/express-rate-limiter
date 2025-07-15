@@ -98,7 +98,7 @@ const customRateLimiter = createRateLimiter({
                 windowSizeInSeconds: 60 * 60,
                 maxRequests: 1000,
             },
-            criteria: (req: Request) => req.headers['x-user'] === 'jaycar',
+            criteria: (req: Request) => req.headers['x-user'] === 'userName',
             endpoints: ['/auth'],
         },
     ],
